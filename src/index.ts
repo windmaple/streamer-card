@@ -1,8 +1,10 @@
 const express = require('express'); // 引入 Express 框架
-const {Cluster} = require('puppeteer-cluster'); // 引入 Puppeteer Cluster 库，用于并发浏览器任务
+const { Cluster } = require('puppeteer-cluster'); // 引入 Puppeteer Cluster 库，用于并发浏览器任务
 const MarkdownIt = require('markdown-it'); // 引入 Markdown-It 库，用于解析 Markdown 语法
-const md = new MarkdownIt({breaks: false}); // 初始化 Markdown-It，并设置换行符解析选项
-const {LRUCache} = require('lru-cache'); // 引入 LRU 缓存库，并注意其导入方式
+const Papa = require('papaparse'); // 引入 Papa Parse 库，用于解析 CSV
+const fs = require('fs'); // 引入文件系统模块
+const md = new MarkdownIt({ breaks: false }); // 初始化 Markdown-It，并设置换行符解析选项
+const { LRUCache } = require('lru-cache'); // 引入 LRU 缓存库，并注意其导入方式
 const port = 3003; // 设置服务器监听端口
 const url = 'https://fireflycard.shushiai.com/'; // 要访问的目标 URL
 // const url = 'http://localhost:3000/'; // 要访问的目标 URL
@@ -11,9 +13,13 @@ const maxRetries = 3; // 设置请求重试次数
 const maxConcurrency = 10; // 设置 Puppeteer 集群的最大并发数
 const app = express(); // 创建 Express 应用
 app.use(express.json()); // 使用 JSON 中间件
-app.use(express.urlencoded({extended: false})); // 使用 URL 编码中间件
+app.use(express.urlencoded({ extended: false })); // 使用 URL 编码中间件
+const cors = require('cors');
+app.use(cors());
 
 let cluster; // 定义 Puppeteer 集群变量
+
+let quotesAndAuthors;
 
 // 设置 LRU 缓存，最大缓存项数和最大内存限制
 const cache = new LRUCache({
@@ -27,7 +33,7 @@ const cache = new LRUCache({
     updateAgeOnGet: true, // 获取缓存项时更新其年龄
 });
 
-// 初始化 Puppeteer 集群
+// Initialize Puppeteer cluster
 async function initCluster() {
     cluster = await Cluster.launch({
         concurrency: Cluster.CONCURRENCY_CONTEXT, // 使用上下文并发模式
@@ -53,14 +59,41 @@ async function initCluster() {
     console.log('Puppeteer 集群已启动');
 }
 
-// 生成请求唯一标识符
-function generateCacheKey(body) {
-    return JSON.stringify(body); // 将请求体序列化为字符串
+// New helper function to read quotes from CSV
+async function readQuotesFromCSV() {
+    return new Promise((resolve, reject) => {
+        const results = [];
+
+        // Read the CSV file
+        fs.readFile('assets/Famous_Quotes.csv', 'utf8', (err, data) => {
+            if (err) {
+                console.error('Error reading the file:', err);
+                return reject('Error reading the file');
+            }
+
+            // Parse the CSV data using Papa Parse
+            Papa.parse(data, {
+                header: true,
+                complete: (parsedData) => {
+                    // Extract 'text' and 'author' fields
+                    parsedData.data.forEach((row) => {
+                        results.push({ text: row.text, author: row.author });
+                    });
+                    resolve(results); // Resolve the promise with the results
+                }
+            });
+        });
+    });
 }
 
 // 处理请求的主要逻辑
 async function processRequest(req) {
     const body = req.body; // 获取请求体
+
+    const randomQuote = quotesAndAuthors[Math.floor(Math.random() * quotesAndAuthors.length)];
+    body['content'] = randomQuote.text; // Set the content to the randomly selected quote
+    body['author'] = randomQuote.author; // Set the author to the corresponding author
+
     const cacheKey = generateCacheKey(body); // 生成缓存键
 
     // 检查缓存中是否有结果
@@ -90,8 +123,8 @@ async function processRequest(req) {
         url: url + '?' + params.toString(), // 拼接 URL 和查询参数
         body,
         iconSrc,
-    }, async ({page, data}) => {
-        const {url, body, iconSrc} = data;
+    }, async ({ page, data }) => {
+        const { url, body, iconSrc } = data;
         await page.setRequestInterception(true); // 设置请求拦截
         page.on('request', req => {
             if (!useLoadingFont && req.resourceType() === 'font') {
@@ -101,7 +134,7 @@ async function processRequest(req) {
             }
         });
 
-        const viewPortConfig = {width: 1920, height: 1080}; // 设置视口配置
+        const viewPortConfig = { width: 1920, height: 1080 }; // 设置视口配置
         await page.setViewport(viewPortConfig); // 应用视口配置
         console.log('视口设置为:', viewPortConfig);
 
@@ -135,11 +168,11 @@ async function processRequest(req) {
         }
 
         let content = body.content;
-        let isContentHtml:boolean = body.isContentHtml;
+        let isContentHtml: boolean = body.isContentHtml;
         if (content) {
             let html = content;
-             if (!isContentHtml) {
-                 content = content.replace(/\n\n/g, '--br----br--');
+            if (!isContentHtml) {
+                content = content.replace(/\n\n/g, '--br----br--');
                 html = md.render(content);
                 html = html.replace(/--br--/g, '<br/>').replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
             }
@@ -152,14 +185,14 @@ async function processRequest(req) {
         }
 
         if (iconSrc && iconSrc.startsWith('http')) {
-            await page.evaluate(function(imgSrc) {
-                return new Promise(function(resolve) {
-                    var imageElement:any = document.querySelector('#icon');
+            await page.evaluate(function (imgSrc) {
+                return new Promise(function (resolve) {
+                    var imageElement: any = document.querySelector('#icon');
                     console.log("头像", imageElement);
                     if (imageElement) {
                         imageElement.src = imgSrc;
-                        imageElement.addEventListener('load', function() { resolve(true); });
-                        imageElement.addEventListener('error', function() { resolve(true); });
+                        imageElement.addEventListener('load', function () { resolve(true); });
+                        imageElement.addEventListener('error', function () { resolve(true); });
                     } else {
                         resolve(false);
                     }
@@ -170,10 +203,10 @@ async function processRequest(req) {
 
         const boundingBox = await cardElement.boundingBox(); // 获取卡片元素边界框
         if (boundingBox.height > viewPortConfig.height) {
-            await page.setViewport({width: 1920, height: Math.ceil(boundingBox.height)}); // 调整视口高度
+            await page.setViewport({ width: 1920, height: Math.ceil(boundingBox.height) }); // 调整视口高度
         }
         console.log('找到边界框并调整视口');
-        let imgScale = body.imgScale ? body.imgScale: scale;
+        let imgScale = body.imgScale ? body.imgScale : scale;
         console.log('图片缩放比例为:', imgScale)
         const buffer = await page.screenshot({
             type: 'png', // 设置截图格式为 PNG
@@ -235,9 +268,15 @@ process.on('SIGINT', async () => {
 app.listen(port, async () => {
     console.log(`监听端口 ${port}...`);
     await initCluster();
+    quotesAndAuthors = await readQuotesFromCSV();
 });
 
 // 延迟函数，用于等待指定的毫秒数
 function delay(timeout) {
     return new Promise(resolve => setTimeout(resolve, timeout));
+}
+
+// Keep the generateCacheKey function
+function generateCacheKey(body) {
+    return JSON.stringify(body); // 将请求体序列化为字符串
 }
