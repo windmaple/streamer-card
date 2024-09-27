@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>每日名人名言</title>
+    <style>
+        /* 简单的样式 */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        #card {
+            border: none;
+            /* Make the border invisible */
+            padding: 10px;
+            margin-top: 20px;
+            display: none;
+            /* 初始隐藏 */
+        }
+
+        /* Scale down the image */
+        #cardImage {
+            max-width: 80%;
+            /* Scale down the image to 80% of its container */
+            height: auto;
+            /* Maintain aspect ratio */
+            display: block;
+            /* Ensure it behaves as a block element */
+            margin: 0 auto;
+            /* Center the image */
+        }
+
+        /* Loader animation styles */
+        .loader {
+            border: 16px solid #f3f3f3;
+            /* Light grey */
+            border-top: 16px solid #3498db;
+            /* Blue */
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="card">
+        <img id="cardImage" alt="生成的卡片" />
+    </div>
+
+    <script>
+        // 由于表单已被移除，直接调用生成卡片的逻辑
+        async function generateCard() {
+            // 显示加载旋转图标
+            const spinner = document.createElement('div');
+            spinner.innerHTML = '<div class="loader"></div> 正在生成卡片...'; // 使用 CSS 动画
+            document.body.appendChild(spinner); // Append the spinner to the body
+
+            const response = await fetch('http://127.0.0.1:3003/saveImg', {
+                method: 'POST',
+                body: JSON.stringify({
+                    // Dynamic
+                    temp: "tempC", //["tempA", "tempB", "tempC"][Math.floor(Math.random() * 3)],
+                    // Dynamic
+                    color: ["dark-color-1", "dark-color-2", "light-blue-color-1", "light-blue-color-2", "light-blue-color-3", "light-blue-color-4", "light-blue-color-5", "light-blue-color-6", "light-blue-color-7", "light-blue-color-8", "light-blue-color-9", "light-blue-color-10", "light-blue-color-11", "light-blue-color-12", "light-blue-color-13", "light-blue-color-14", "light-blue-color-15", "light-red-color-1", "light-red-color-2", "light-red-color-3", "light-red-color-4", "light-red-color-5", "light-red-color-6", "light-red-color-7", "light-red-color-8", "light-red-color-9", "light-red-color-10", "light-red-color-11", "light-red-color-12", "light-red-color-13", "light-red-color-14", "light-red-color-15", "light-green-color-1", "light-green-color-2", "light-green-color-3", "light-green-color-4", "light-green-color-5", "light-green-color-6", "light-green-color-7", "light-green-color-8", "light-green-color-9", "light-green-color-10", "light-green-color-11", "light-green-color-12", "light-green-color-13", "light-green-color-14", "light-green-color-15"][Math.floor(Math.random() * 50)],
+                    icon: "",
+                    title: "😄 每日名人名言",
+                    // Dynamic
+                    date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                    // Set in backend
+                    content: "TBD",
+                    foreword: "名人名言卡片",
+                    // Set in backend
+                    author: "TBD",
+                    textcount: "字数",
+                    qrcodetitle: "Celebrity Quote Of The Day",
+                    qrcodetext: "扫描二维码",
+                    qrcode: "https://bing.com",
+                    watermark: "",
+                    switchConfig: {
+                        showIcon: "false",
+                        showForeword: "false",
+                        showTextCount: "false"
+                    }
+                }),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            // 移除加载旋转图标
+            document.body.removeChild(spinner); // This should be after the response handling
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const imgUrl = URL.createObjectURL(blob);
+                document.getElementById('cardImage').src = imgUrl;
+                document.getElementById('card').style.display = 'block'; // 显示卡片
+            } else {
+                alert('生成卡片失败，请重试。');
+            }
+        }
+
+        // 调用生成卡片的函数
+        generateCard();
+    </script>
+</body>
+
+</html>
